@@ -3,6 +3,7 @@
 Pure logic with injected dependencies (LLM, retriever), so it can be tested without a database.
 """
 
+import re
 import time
 from dataclasses import dataclass, field
 
@@ -53,6 +54,10 @@ class Outcome:
         return self.hits[0].score if self.hits else 0.0
 
 
+# Bracketed text that is not a citation like [1] or [1, 2]: "[insert link]", "[EMAIL]", "[TBD]"...
+_PLACEHOLDER = re.compile(r"\[(?!\s*\d+(?:\s*,\s*\d+)*\s*\])[^\]]*\]")
+
+
 def decide_route(c: Classification, top_score: float, answer: Answer | None, refused: bool) -> tuple[str, str]:
     """Return (route, reason). A human sees anything risky, urgent or uncertain."""
     if refused:
@@ -67,6 +72,8 @@ def decide_route(c: Classification, top_score: float, answer: Answer | None, ref
         return "draft_ticket", "No relevant knowledge-base article."
     if answer is None or not answer.answerable or not answer.citations:
         return "draft_ticket", "The knowledge base does not fully answer this."
+    if _PLACEHOLDER.search(answer.text):
+        return "draft_ticket", "The answer contains a placeholder instead of a real value."
     if top_score < settings.auto_reply_score:
         return "draft_ticket", f"Low confidence (retrieval score {top_score:.2f})."
     return "auto_reply", f"Answered from the knowledge base (retrieval score {top_score:.2f})."

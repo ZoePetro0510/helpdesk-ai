@@ -12,3 +12,7 @@ __pycache__/
 .DS_Store
 .vscode/
 .idea/
+
+# Web
+web/node_modules/
+web/dist/

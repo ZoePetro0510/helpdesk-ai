@@ -4,7 +4,9 @@ An AI agent for an internal IT & HR helpdesk. It reads an employee's request, cl
 
 > **Data:** a fictional company ("Orbit") with synthetic IT and HR policies. No real employee data.
 
-**Stack:** Python · FastAPI · PostgreSQL + pgvector · local embeddings (fastembed) · Claude or a local Ollama model · self-hosted n8n · Docker Compose
+**Stack:** Python · FastAPI · PostgreSQL + pgvector · local embeddings (fastembed) · Claude or a local Ollama model · self-hosted n8n · React + TypeScript · Docker Compose
+
+![Manager dashboard](docs/dashboard.jpg)
 
 ## Status
 
@@ -12,7 +14,7 @@ An AI agent for an internal IT & HR helpdesk. It reads an employee's request, cl
 |---|---|---|
 | 1 | Core agent: classification, RAG with citations, routing, audit log | ✅ Done |
 | 2 | Self-hosted n8n intake, ticket creation, human approval queue | ✅ Done |
-| 3 | React + TypeScript web app and manager dashboard | Planned |
+| 3 | React + TypeScript web app and manager dashboard | ✅ Done |
 | 4 | Evals report, Playwright, GitHub Actions, live demo | Planned |
 
 ## How a request flows
@@ -39,6 +41,7 @@ The ticket system is a small mock (`/mock-tickets`) so the whole flow runs witho
 - it needs an action or approval, not just an answer
 - no knowledge-base section is relevant, or the answer has no valid citation
 - the best match is below the auto-reply confidence threshold
+- the answer contains a placeholder such as "[insert link]" instead of a real value
 - the model declined the request
 
 ## Run it
@@ -47,15 +50,32 @@ Requirements: Docker. For a free local model, install [Ollama](https://ollama.co
 
 ```bash
 cp .env.example .env            # choose LLM_PROVIDER; set INTERNAL_TOKEN and N8N_ENCRYPTION_KEY to random values
-docker compose up --build       # db + api + n8n
+docker compose up --build       # db + api + n8n + web
+docker compose exec api python -m scripts.seed_demo   # optional: 46 demo requests for the dashboard
 ```
 
 | Service | URL |
 |---|---|
+| **Web app** | **http://localhost:8080** |
 | API docs (Swagger) | http://localhost:8000/docs |
 | n8n editor | http://localhost:5678 |
 
 n8n starts with both workflows imported from `n8n/workflows/` and active, so there is no manual setup.
+
+### Web app
+
+One app with a view for each role:
+
+| View | Who | What it does |
+|---|---|---|
+| **Ask IT or HR** | Employees | Send a request; get an answer with its policy sources, or a note that it went to the right team |
+| **Approval queue** | IT / HR agents | Review drafted tickets, edit title, team or priority, then approve (creates the ticket through n8n) or reject with a reason |
+| **All requests** | Agents | Every request with its decision; opens a drawer with the full audit trail |
+| **Overview** | Managers | Auto-resolve rate, time saved, queue size and age, response time, model cost, requests by category and per day |
+
+![Approval queue](docs/approval-queue.jpg)
+
+The dashboard's "time saved" multiplies answered questions by an assumed handling time (`MINUTES_PER_AUTO_ANSWER`, default 8 minutes) and says so on the tile. Chart colors were checked for color-blind separation and contrast in light and dark mode, every chart has a table view, and status is always shown with an icon and a label, never color alone.
 
 **Send a request the way an email integration would:**
 
@@ -83,13 +103,14 @@ curl -X POST localhost:8000/requests/11/approve -H 'content-type: application/js
 | GET | `/requests/{id}` · `/requests/{id}/audit` | One request · its full audit trail |
 | POST | `/requests/{id}/approve` | Approve the drafted ticket, optionally editing title, team or priority |
 | POST | `/requests/{id}/reject` | Reject with a reason |
+| GET | `/metrics` | Numbers for the manager dashboard |
 | GET | `/mock-tickets` · `/mock-tickets/{key}` | The mock ticket system |
 | POST | `/mock-tickets` | Internal: called by n8n with the shared token |
 
 ## Quality
 
 ```bash
-docker compose exec api pytest                          # unit + integration tests
+docker compose exec api pytest                          # unit + integration tests (own database: helpdesk_test)
 docker compose exec api python -m eval.run_eval --retrieval-only   # retrieval hit@k, MRR (no LLM)
 docker compose exec api python -m eval.run_eval         # classification, urgency, routing, token cost
 ```
@@ -109,7 +130,7 @@ The eval set (`data/eval/requests.jsonl`) has 46 labeled requests, each with the
 
 Every routing error is on the safe side: a question that could have been answered automatically became a ticket. The prompt-injection request was classified and sent to a person, not acted on. These numbers come from a small local 3B model; Phase 4 repeats the eval with Claude.
 
-**Known issue (local model):** `llama3.2` sometimes adds steps that are not in the sources to a suggested answer, for example a made-up "New Request" button. So far this was seen in a suggested answer inside a drafted ticket, which a person reviews. Auto-replies could have the same problem, which is why Phase 4 adds an answer-groundedness eval (LLM-as-judge) and runs it on Claude.
+**Known issue (local model):** `llama3.2` sometimes adds details that are not in the sources, for example a made-up "New Request" button in a suggested answer, or "[insert link to HR portal]" in an answer that was sent automatically. The second case is now blocked: answers containing a placeholder go to a person (`decide_route`, with tests). Invented details that look real can't be caught by a pattern, which is why Phase 4 adds an answer-groundedness eval (LLM-as-judge) and runs it on Claude.
 
 ## Cost
 
@@ -138,8 +159,10 @@ api/app/
   pii.py         personal-data masking
   service.py     saves outcomes, approve / reject with audit events
   tickets.py     mock ticket system + clients (direct, or through n8n)
+  metrics.py     dashboard numbers
   main.py        FastAPI endpoints
 n8n/workflows/   intake and create-ticket workflows (imported on start)
+web/src/         React + TypeScript app (Ask, Approval queue, All requests, Overview)
 api/eval/        evaluation runner
 api/tests/       pytest suite
 data/kb/         synthetic IT & HR policies

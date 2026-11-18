@@ -7,6 +7,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app import metrics
 from app.config import settings
 from app.db import get_session, init_db
 from app.embeddings import LocalEmbedder
@@ -112,6 +113,13 @@ def reject_request(request_id: int, body: RejectIn, session: Session = Depends(g
         return reject(session, req, body.approver, body.reason)
     except DecisionError as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
+
+
+# --- Dashboard ------------------------------------------------------------
+
+@app.get("/metrics")
+def get_metrics(days: int = 14, session: Session = Depends(get_session)):
+    return metrics.compute(session, days=min(max(days, 1), 90))
 
 
 # --- Mock ticket system (stands in for Jira / Trello) ----------------------

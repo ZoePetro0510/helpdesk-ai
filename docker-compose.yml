@@ -69,6 +69,17 @@ services:
       api:
         condition: service_healthy
 
+  # React web app (employee form, approval queue, history, dashboard) on :8080
+  web:
+    build: ./web
+    image: helpdesk-web
+    container_name: helpdesk-web
+    ports:
+      - "8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
 volumes:
   pgdata:
   n8n_data:

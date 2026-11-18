@@ -104,3 +104,19 @@ def test_request_text_is_wrapped_as_data():
 def test_audit_steps_are_recorded():
     o = process("When do we get paid?", FakeLLM([classification(), ANSWER]), FakeRetriever(0.85))
     assert [s for s, _ in o.steps] == ["pii_mask", "classify", "retrieve", "answer", "route"]
+
+
+@pytest.mark.parametrize(
+    "text, auto",
+    [
+        ("You can access the HR portal at [insert link to HR portal] [1].", False),
+        ("We will email you at [EMAIL] [1].", False),
+        ("Salaries are paid on the 9th [1] and payslips by the 7th [1, 2].", True),
+    ],
+)
+def test_answers_with_placeholders_are_not_sent(text, auto):
+    answer = {"answerable": True, "answer": text, "citations": [1, 2]}
+    o = process("q", FakeLLM([classification(), answer]), FakeRetriever(0.9))
+    assert (o.route == "auto_reply") is auto
+    if not auto:
+        assert "placeholder" in o.route_reason

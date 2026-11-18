@@ -41,5 +41,14 @@ class Settings(BaseSettings):
     # Shared secret between the API and n8n for internal endpoints
     internal_token: str = "change-me-internal"
 
+    # Dashboard assumption: minutes a person would spend answering one routine question
+    minutes_per_auto_answer: int = 8
+    # Claude prices, USD per million tokens (input, output). Local models cost 0.
+    model_prices: dict[str, tuple[float, float]] = {
+        "claude-opus-5-5": (4.0, 20.0),
+        "claude-sonnet-5-5": (2.0, 10.0),
+        "claude-haiku-5-5": (0.10, 0.50),
+    }
+
 
 settings = Settings()

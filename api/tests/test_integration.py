@@ -10,6 +10,24 @@ import pytest
 pytestmark = pytest.mark.skipif(not os.getenv("RUN_INTEGRATION"), reason="needs the database (run inside Docker)")
 
 
+@pytest.fixture(scope="module", autouse=True)
+def fresh_test_database():
+    """Empty tables and a fresh knowledge-base index in the test database."""
+    from sqlalchemy import text
+
+    from app.config import settings
+    from app.db import SessionLocal, engine, init_db
+    from app.embeddings import LocalEmbedder
+    from app.kb import rebuild_index
+
+    assert engine.url.database == "helpdesk_test"  # never touch the demo database
+    init_db()
+    with SessionLocal() as session:
+        session.execute(text("TRUNCATE audit_events, help_requests, mock_tickets RESTART IDENTITY"))
+        session.commit()
+        rebuild_index(session, settings.kb_dir, LocalEmbedder())
+
+
 @pytest.fixture
 def client():
     from fastapi import Depends
