@@ -1,6 +1,7 @@
 """API request and response models."""
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -40,3 +41,48 @@ class RequestOut(BaseModel):
     input_tokens: int
     output_tokens: int
     latency_ms: int
+    ticket_draft: dict | None = None
+    ticket_key: str | None = None
+    ticket_url: str | None = None
+    decided_by: str | None = None
+    decided_at: datetime | None = None
+    decision_note: str | None = None
+
+
+Priority = Literal["low", "medium", "high"]
+Team = Literal["IT", "HR", "OPS"]
+
+
+class ApproveIn(BaseModel):
+    approver: str = Field(min_length=2, max_length=200)
+    # Optional edits to the drafted ticket
+    title: str | None = Field(default=None, max_length=300)
+    team: Team | None = None
+    priority: Priority | None = None
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class RejectIn(BaseModel):
+    approver: str = Field(min_length=2, max_length=200)
+    reason: str = Field(min_length=3, max_length=2000)
+
+
+class TicketIn(BaseModel):
+    title: str = Field(max_length=300)
+    team: Team
+    priority: Priority
+    description: str
+    request_id: int | None = None
+
+
+class TicketOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    key: str
+    created_at: datetime
+    request_id: int | None
+    title: str
+    team: str
+    priority: str
+    description: str
+    status: str

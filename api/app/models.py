@@ -58,6 +58,30 @@ class HelpRequest(Base):
     latency_ms: Mapped[int] = mapped_column(Integer, default=0)
     refused: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # Human-in-the-loop: the drafted ticket and what a person decided
+    ticket_draft: Mapped[dict | None] = mapped_column(JSON)
+    ticket_key: Mapped[str | None] = mapped_column(String(40))
+    ticket_url: Mapped[str | None] = mapped_column(String(300))
+    decided_by: Mapped[str | None] = mapped_column(String(200))
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    decision_note: Mapped[str | None] = mapped_column(Text)
+
+
+class MockTicket(Base):
+    """A minimal stand-in for Jira / Trello, so the full flow runs without an external account."""
+
+    __tablename__ = "mock_tickets"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(String(20), unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
+    request_id: Mapped[int | None] = mapped_column(Integer)
+    title: Mapped[str] = mapped_column(String(300))
+    team: Mapped[str] = mapped_column(String(10))
+    priority: Mapped[str] = mapped_column(String(10))
+    description: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="open")
+
 
 class AuditEvent(Base):
     """Append-only log of every step, for troubleshooting and review."""

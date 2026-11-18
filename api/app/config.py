@@ -34,5 +34,12 @@ class Settings(BaseSettings):
     min_retrieval_score: float = 0.55  # below this, skip the answer step: nothing relevant in the KB
     auto_reply_score: float = 0.68  # retrieval score needed to send an answer without a human
 
+    # Tickets: "n8n" sends approved tickets through the n8n workflow, "direct" writes them itself
+    ticket_backend: str = "direct"
+    n8n_ticket_webhook: str = "http://n8n:5678/webhook/create-ticket"
+    public_url: str = "http://localhost:8000"
+    # Shared secret between the API and n8n for internal endpoints
+    internal_token: str = "change-me-internal"
+
 
 settings = Settings()

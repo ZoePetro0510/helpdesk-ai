@@ -4,26 +4,34 @@ An AI agent for an internal IT & HR helpdesk. It reads an employee's request, cl
 
 > **Data:** a fictional company ("Orbit") with synthetic IT and HR policies. No real employee data.
 
-**Stack:** Python · FastAPI · PostgreSQL + pgvector · local embeddings (fastembed) · Claude or a local Ollama model · Docker Compose
+**Stack:** Python · FastAPI · PostgreSQL + pgvector · local embeddings (fastembed) · Claude or a local Ollama model · self-hosted n8n · Docker Compose
 
 ## Status
 
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | Core agent: classification, RAG with citations, routing, audit log | ✅ Done |
-| 2 | Self-hosted n8n intake, ticket creation, human approval queue | Planned |
+| 2 | Self-hosted n8n intake, ticket creation, human approval queue | ✅ Done |
 | 3 | React + TypeScript web app and manager dashboard | Planned |
 | 4 | Evals report, Playwright, GitHub Actions, live demo | Planned |
 
 ## How a request flows
 
 ```
-request ─► mask PII ─► classify ─► search KB ─► answer with [n] citations ─► route
-                       (category,     (pgvector)    (only if a relevant           │
-                        urgency,                     source exists)              ├─► auto_reply
-                        action?)                                                 └─► draft_ticket (a person approves)
-every step ─► audit_events table
+email / form ─► n8n intake ─► API: mask PII ─► classify ─► search KB ─► cited answer ─► route
+                webhook                                                                   │
+                                                          ┌───────────────────────────────┤
+                                                          ▼                               ▼
+                                                   auto_reply                      draft_ticket
+                                              (answer + sources                 (pending_approval)
+                                               back to the sender)                      │
+                                                                       person approves / edits / rejects
+                                                                                        │ approve
+                                                                     API ─► n8n "create ticket" ─► ticket system
+every step and decision ─► audit_events table
 ```
+
+The ticket system is a small mock (`/mock-tickets`) so the whole flow runs without an external account. Because tickets are created by an n8n workflow, moving to Jira or Trello means changing one node in n8n, not the API.
 
 **Routing rules** (`app/pipeline.py:decide_route`). A request goes to a person when any of these is true:
 
@@ -38,16 +46,45 @@ every step ─► audit_events table
 Requirements: Docker. For a free local model, install [Ollama](https://ollama.com) and run `ollama pull llama3.2`.
 
 ```bash
-cp .env.example .env            # choose LLM_PROVIDER: ollama or anthropic
-docker compose up --build       # db + api; the knowledge base is indexed on start
+cp .env.example .env            # choose LLM_PROVIDER; set INTERNAL_TOKEN and N8N_ENCRYPTION_KEY to random values
+docker compose up --build       # db + api + n8n
 ```
 
-API docs: http://localhost:8000/docs
+| Service | URL |
+|---|---|
+| API docs (Swagger) | http://localhost:8000/docs |
+| n8n editor | http://localhost:5678 |
+
+n8n starts with both workflows imported from `n8n/workflows/` and active, so there is no manual setup.
+
+**Send a request the way an email integration would:**
 
 ```bash
-curl -X POST localhost:8000/requests -H 'content-type: application/json' \
-  -d '{"text": "How many vacation days can I carry over to next year?"}'
+curl -X POST localhost:5678/webhook/helpdesk-intake -H 'content-type: application/json' \
+  -d '{"from": "dana@orbit.com", "subject": "Pension", "body": "How much does the company contribute to my pension?"}'
+# {"status":"answered","reply":"The company contributes 6.5% of your salary to your pension fund.","sources":["Benefits > Pension"]}
 ```
+
+**Review the approval queue and approve a drafted ticket:**
+
+```bash
+curl 'localhost:8000/requests?status=pending_approval'
+curl -X POST localhost:8000/requests/11/approve -H 'content-type: application/json' \
+  -d '{"approver": "Noa (IT)", "priority": "high", "note": "Send a loaner today"}'
+# {"status":"ticket_created","ticket_key":"HD-102", ...}
+```
+
+### API
+
+| Method | Path | What it does |
+|---|---|---|
+| POST | `/requests` | Run a request through the agent |
+| GET | `/requests?status=` | List requests (e.g. `pending_approval`) |
+| GET | `/requests/{id}` · `/requests/{id}/audit` | One request · its full audit trail |
+| POST | `/requests/{id}/approve` | Approve the drafted ticket, optionally editing title, team or priority |
+| POST | `/requests/{id}/reject` | Reject with a reason |
+| GET | `/mock-tickets` · `/mock-tickets/{key}` | The mock ticket system |
+| POST | `/mock-tickets` | Internal: called by n8n with the shared token |
 
 ## Quality
 
@@ -72,6 +109,8 @@ The eval set (`data/eval/requests.jsonl`) has 46 labeled requests, each with the
 
 Every routing error is on the safe side: a question that could have been answered automatically became a ticket. The prompt-injection request was classified and sent to a person, not acted on. These numbers come from a small local 3B model; Phase 4 repeats the eval with Claude.
 
+**Known issue (local model):** `llama3.2` sometimes adds steps that are not in the sources to a suggested answer, for example a made-up "New Request" button. So far this was seen in a suggested answer inside a drafted ticket, which a person reviews. Auto-replies could have the same problem, which is why Phase 4 adds an answer-groundedness eval (LLM-as-judge) and runs it on Claude.
+
 ## Cost
 
 - Embeddings run locally, so indexing and search cost nothing.
@@ -82,7 +121,8 @@ Every routing error is on the safe side: a question that could have been answere
 
 - Emails, phone numbers, card numbers, IBANs and ID numbers are masked before the text reaches the model or the database.
 - Request text and sources are passed as data inside tags; the prompts tell the model not to follow instructions in them.
-- Nothing is sent automatically for security incidents, urgent requests or anything that needs an approval.
+- Nothing is sent automatically for security incidents, urgent requests or anything that needs an approval. A ticket is created only after a person approves it, and if the ticket system fails the request stays in the queue.
+- The internal ticket endpoint and the n8n ticket webhook both check a shared secret (`INTERNAL_TOKEN`), so an outside caller can't create tickets.
 - Every step is written to an append-only audit table.
 - Secrets live only in `.env` (ignored by git and Docker).
 
@@ -96,7 +136,10 @@ api/app/
   retrieval.py   pgvector cosine search
   kb.py          Markdown knowledge base -> one chunk per section
   pii.py         personal-data masking
+  service.py     saves outcomes, approve / reject with audit events
+  tickets.py     mock ticket system + clients (direct, or through n8n)
   main.py        FastAPI endpoints
+n8n/workflows/   intake and create-ticket workflows (imported on start)
 api/eval/        evaluation runner
 api/tests/       pytest suite
 data/kb/         synthetic IT & HR policies

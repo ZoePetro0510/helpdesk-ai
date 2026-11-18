@@ -1,0 +1,87 @@
+{
+  "id": "hdIntakeEmail001",
+  "name": "Helpdesk: intake (email / form)",
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "nodes": [
+    {
+      "id": "c1d2e3f4-0002-4000-8000-000000000001",
+      "name": "Incoming request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "8e4a1c2b-3d5f-4e6a-8b7c-9d0e1f2a3b42",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "helpdesk-intake",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "c1d2e3f4-0002-4000-8000-000000000002",
+      "name": "Normalize",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [220, 0],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d1e2f3a4-0002-4000-8000-000000000001",
+              "name": "text",
+              "type": "string",
+              "value": "={{ [$json.body.subject, $json.body.text || $json.body.body].filter(Boolean).join('\\n') }}"
+            },
+            {
+              "id": "d1e2f3a4-0002-4000-8000-000000000002",
+              "name": "channel",
+              "type": "string",
+              "value": "={{ $json.body.channel || 'email' }}"
+            },
+            {
+              "id": "d1e2f3a4-0002-4000-8000-000000000003",
+              "name": "requester",
+              "type": "string",
+              "value": "={{ $json.body.from || $json.body.requester || '' }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c1d2e3f4-0002-4000-8000-000000000003",
+      "name": "Send to helpdesk agent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/requests",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: $json.text, channel: $json.channel, requester: $json.requester || null }) }}",
+        "options": { "timeout": 120000 }
+      }
+    },
+    {
+      "id": "c1d2e3f4-0002-4000-8000-000000000004",
+      "name": "Reply to sender",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [660, 0],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ request_id: $json.id, status: $json.status, reply: $json.status === 'answered' ? $json.answer : 'Thanks, your request was sent to the ' + $json.team + ' team.', sources: $json.citations.map(c => c.title + ' > ' + c.section) }) }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Incoming request": { "main": [[{ "node": "Normalize", "type": "main", "index": 0 }]] },
+    "Normalize": { "main": [[{ "node": "Send to helpdesk agent", "type": "main", "index": 0 }]] },
+    "Send to helpdesk agent": { "main": [[{ "node": "Reply to sender", "type": "main", "index": 0 }]] }
+  }
+}

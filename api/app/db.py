@@ -20,6 +20,13 @@ def init_db() -> None:
     with engine.begin() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
     Base.metadata.create_all(engine)
+    # Columns added after Phase 1 (create_all does not alter existing tables)
+    with engine.begin() as conn:
+        for column, kind in [
+            ("ticket_draft", "JSON"), ("ticket_key", "VARCHAR(40)"), ("ticket_url", "VARCHAR(300)"),
+            ("decided_by", "VARCHAR(200)"), ("decided_at", "TIMESTAMPTZ"), ("decision_note", "TEXT"),
+        ]:
+            conn.execute(text(f"ALTER TABLE help_requests ADD COLUMN IF NOT EXISTS {column} {kind}"))
 
 
 def get_session():

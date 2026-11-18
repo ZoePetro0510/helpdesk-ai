@@ -1,0 +1,97 @@
+{
+  "id": "hdCreateTicket01",
+  "name": "Helpdesk: create ticket",
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "nodes": [
+    {
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Approved ticket",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "5d2f8f8e-6a1e-4b9a-9d1c-2f3e4a5b6c71",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "create-ticket",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "a1b2c3d4-0001-4000-8000-000000000002",
+      "name": "From the API?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "b7c1e2f0-0001-4000-8000-000000000001",
+              "leftValue": "={{ $json.headers['x-internal-token'] }}",
+              "rightValue": "={{ $env.INTERNAL_TOKEN }}",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a1b2c3d4-0001-4000-8000-000000000003",
+      "name": "Create in ticket system",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, -100],
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/mock-tickets",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "X-Internal-Token", "value": "={{ $env.INTERNAL_TOKEN }}" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "a1b2c3d4-0001-4000-8000-000000000004",
+      "name": "Return ticket key",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [700, -100],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ key: $json.key, url: $json.url }) }}",
+        "options": { "responseCode": 201 }
+      }
+    },
+    {
+      "id": "a1b2c3d4-0001-4000-8000-000000000005",
+      "name": "Reject: unauthorized",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [460, 120],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ error: 'unauthorized' }) }}",
+        "options": { "responseCode": 401 }
+      }
+    }
+  ],
+  "connections": {
+    "Approved ticket": { "main": [[{ "node": "From the API?", "type": "main", "index": 0 }]] },
+    "From the API?": {
+      "main": [
+        [{ "node": "Create in ticket system", "type": "main", "index": 0 }],
+        [{ "node": "Reject: unauthorized", "type": "main", "index": 0 }]
+      ]
+    },
+    "Create in ticket system": { "main": [[{ "node": "Return ticket key", "type": "main", "index": 0 }]] }
+  }
+}
