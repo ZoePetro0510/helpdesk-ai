@@ -1,0 +1,48 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: helpdesk-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-helpdesk}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      POSTGRES_DB: ${POSTGRES_DB:-helpdesk}
+    ports:
+      - "${DB_HOST_PORT:-5433}:5432"  # 5433 on the host, so a local PostgreSQL on 5432 doesn't clash
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-helpdesk} -d ${POSTGRES_DB:-helpdesk}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # FastAPI agent: indexes the knowledge base on start, then serves on :8000
+  api:
+    build: ./api
+    image: helpdesk-api
+    container_name: helpdesk-api
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-helpdesk}:${POSTGRES_PASSWORD:-change-me}@db:5432/${POSTGRES_DB:-helpdesk}
+      OLLAMA_URL: http://host.docker.internal:11434  # Ollama runs on the host (uses the Mac's GPU)
+      RUN_INTEGRATION: "1"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 10
+
+  # Phase 2: self-hosted n8n for intake webhooks and ticket creation
+
+volumes:
+  pgdata:

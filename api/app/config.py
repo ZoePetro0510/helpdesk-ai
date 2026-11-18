@@ -1,0 +1,38 @@
+"""Settings, read from environment variables (and a local .env file)."""
+
+from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# api/app/config.py -> project root is two levels up (/ inside the container, where /data is mounted)
+_DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=(".env", "../.env"), extra="ignore")
+
+    database_url: str = "postgresql+psycopg://helpdesk:change-me@localhost:5433/helpdesk"
+
+    # LLM: "ollama" (free, local), "anthropic", or "fake" (tests / no model available)
+    llm_provider: str = "ollama"
+    ollama_url: str = "http://localhost:11434"
+    ollama_model: str = "llama3.2"
+    anthropic_model: str = "claude-opus-5-5"
+    # Effort for Claude: classification is simple, answers need a little more care
+    classify_effort: str = "low"
+    answer_effort: str = "medium"
+
+    # Embeddings run locally (no API cost)
+    embedding_model: str = "BAAI/bge-small-en-v1.5"
+    embedding_dim: int = 384
+
+    kb_dir: Path = _DATA_DIR / "kb"
+    eval_file: Path = _DATA_DIR / "eval" / "requests.jsonl"
+
+    # Routing
+    top_k: int = 4
+    min_retrieval_score: float = 0.55  # below this, skip the answer step: nothing relevant in the KB
+    auto_reply_score: float = 0.68  # retrieval score needed to send an answer without a human
+
+
+settings = Settings()
