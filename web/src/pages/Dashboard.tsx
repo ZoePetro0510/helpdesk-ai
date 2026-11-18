@@ -98,7 +98,7 @@ function CategoryChart({ data }: { data: Metrics["by_category"] }) {
       {asTable ? (
         <table>
           <thead>
-            <tr><th>Category</th><th className="num">Automatic</th><th className="num">Person</th><th className="num">Total</th></tr>
+            <tr><th scope="col">Category</th><th scope="col" className="num">Automatic</th><th scope="col" className="num">Person</th><th scope="col" className="num">Total</th></tr>
           </thead>
           <tbody>
             {data.map((d) => (

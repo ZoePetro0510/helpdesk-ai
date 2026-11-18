@@ -1,7 +1,8 @@
 """Provider-independent LLM layer that returns validated JSON.
 
-- ollama:    a local model, free, for development and tests
+- ollama:    a local model, free, for development
 - anthropic: Claude through the official SDK, for the real results
+- stub:      deterministic rules, for CI and end-to-end tests (no model needed)
 - fake:      scripted responses for unit tests
 """
 
@@ -147,6 +148,10 @@ def get_llm() -> LLM:
         return AnthropicLLM()
     if provider == "ollama":
         return OllamaLLM()
+    if provider == "stub":
+        from app.stub_llm import StubLLM
+
+        return StubLLM()
     if provider == "fake":
         return FakeLLM()
     raise ValueError(f"Unknown LLM_PROVIDER: {settings.llm_provider}")

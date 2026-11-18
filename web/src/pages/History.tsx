@@ -48,13 +48,13 @@ export function History() {
           <table>
             <thead>
               <tr>
-                <th className="num">#</th>
-                <th>Received</th>
-                <th>Request</th>
-                <th>Category</th>
-                <th>Status</th>
-                <th>Ticket</th>
-                <th className="num">Time</th>
+                <th scope="col" className="num">#</th>
+                <th scope="col">Received</th>
+                <th scope="col">Request</th>
+                <th scope="col">Category</th>
+                <th scope="col">Status</th>
+                <th scope="col">Ticket</th>
+                <th scope="col" className="num">Time</th>
               </tr>
             </thead>
             <tbody>

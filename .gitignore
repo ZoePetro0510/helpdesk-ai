@@ -17,3 +17,5 @@ __pycache__/
 web/node_modules/
 web/dist/
 web/*.tsbuildinfo
+web/playwright-report/
+web/test-results/
