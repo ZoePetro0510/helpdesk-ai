@@ -12,7 +12,7 @@ concurrency:
 jobs:
   api:
     name: API lint + unit tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned: Playwright 1.55 install-deps supports 24.04, not 26
     defaults:
       run:
         working-directory: api
@@ -29,7 +29,7 @@ jobs:
 
   web:
     name: Web type-check + build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned: Playwright 1.55 install-deps supports 24.04, not 26
     defaults:
       run:
         working-directory: web
@@ -46,7 +46,7 @@ jobs:
   e2e:
     name: Full stack (Docker) + eval gate + Playwright
     needs: [api, web]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned: Playwright 1.55 install-deps supports 24.04, not 26
     env:
       LLM_PROVIDER: stub        # deterministic rules: no model or API key in CI
       API_PORT: "18000"
