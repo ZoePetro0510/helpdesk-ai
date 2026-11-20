@@ -18,7 +18,8 @@ An AI agent for an internal IT & HR helpdesk. It reads an employee's request, cl
 | 2 | Self-hosted n8n intake, ticket creation, human approval queue | ✅ Done |
 | 3 | React + TypeScript web app and manager dashboard | ✅ Done |
 | 4 | Groundedness judge, eval quality gate, Playwright, GitHub Actions | ✅ Done |
-| 5 | Eval run on Claude, live demo | Planned |
+| 5 | Live demo (Hugging Face Spaces, auto-deployed after CI) | In progress |
+| 6 | Eval run on Claude | Planned |
 
 ## How a request flows
 
@@ -46,6 +47,17 @@ The ticket system is a small mock (`/mock-tickets`) so the whole flow runs witho
 - the best match is below the auto-reply confidence threshold
 - the answer contains a placeholder such as "[insert link]" instead of a real value
 - the model declined the request
+
+## Live demo
+
+The demo runs as one container on Hugging Face Spaces (`deploy/hf/Dockerfile`): PostgreSQL with pgvector, the API and the web app on a single port. It uses the rule-based stub model and the built-in mock ticket system, so visitors cost nothing; data resets on every restart, and each visitor is limited to 10 requests a minute. After CI passes on `main`, `.github/workflows/deploy-demo.yml` pushes the app to the Space.
+
+To run the demo image locally:
+
+```bash
+docker build -f deploy/hf/Dockerfile -t helpdesk-demo .
+docker run -p 7860:7860 helpdesk-demo     # http://localhost:7860
+```
 
 ## Run it
 
@@ -201,6 +213,8 @@ n8n/workflows/   intake and create-ticket workflows (imported on start)
 web/src/         React + TypeScript app (Ask, Approval queue, All requests, Overview)
 web/e2e/         Playwright end-to-end tests
 .github/workflows/ci.yml   lint, tests, eval gate, Playwright on every push
+.github/workflows/deploy-demo.yml   deploys the live demo after CI passes
+deploy/hf/       one-container demo image (Postgres + API + web)
 api/eval/        evaluation runner
 api/tests/       pytest suite
 data/kb/         synthetic IT & HR policies

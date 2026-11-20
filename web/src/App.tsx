@@ -24,6 +24,14 @@ export function App() {
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
+  const [demo, setDemo] = useState<{ llm_provider: string; ticket_backend: string } | null>(null);
+  useEffect(() => {
+    fetch("/api/health")
+      .then((r) => r.json())
+      .then((h) => h.demo_mode && setDemo(h))
+      .catch(() => undefined);
+  }, []);
+
   const refreshPending = useCallback(() => {
     api.list("pending_approval").then((l) => setPending(l.length), () => setPending(null));
   }, []);
@@ -55,6 +63,14 @@ export function App() {
         <footer>Demo with a fictional company. No real employee data.</footer>
       </nav>
       <main>
+        {demo && (
+          <div className="demo-banner" role="note">
+            <strong>Live demo.</strong> A fictional company with synthetic data that resets on restart. To keep it free,
+            answers come from a {demo.llm_provider === "stub" ? "simple rule-based stand-in" : demo.llm_provider} instead of
+            a language model, and tickets go to a built-in mock system. Please don't enter real personal details.{" "}
+            <a href="https://github.com/ZoePetro0510/helpdesk-ai" target="_blank" rel="noreferrer">Code and eval results on GitHub</a>
+          </div>
+        )}
         {page === "ask" && <Ask onSubmitted={refreshPending} />}
         {page === "queue" && <Queue onChanged={refreshPending} toast={showToast} />}
         {page === "history" && <History />}

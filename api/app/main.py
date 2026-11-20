@@ -1,9 +1,11 @@
 """FastAPI entry point.  Run: uvicorn app.main:app --reload   then open /docs"""
 
 import secrets
+import time
+from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -55,12 +57,28 @@ def _get_or_404(session: Session, request_id: int) -> HelpRequest:
 def health(session: Session = Depends(get_session)):
     chunks = session.scalar(select(func.count()).select_from(KbChunk))
     return {"status": "ok", "llm_provider": settings.llm_provider, "ticket_backend": settings.ticket_backend,
-            "kb_chunks": chunks}
+            "kb_chunks": chunks, "demo_mode": settings.demo_mode}
 
 
 # --- Requests -------------------------------------------------------------
 
-@app.post("/requests", response_model=RequestOut, status_code=201)
+_recent: dict[str, deque] = defaultdict(deque)
+
+
+def demo_rate_limit(request: Request) -> None:
+    """In the public demo, one visitor can send a limited number of requests per minute."""
+    if not settings.demo_mode:
+        return
+    ip = (request.headers.get("x-forwarded-for") or (request.client.host if request.client else "?")).split(",")[0]
+    now, window = time.monotonic(), _recent[ip]
+    while window and now - window[0] > 60:
+        window.popleft()
+    if len(window) >= settings.demo_requests_per_minute:
+        raise HTTPException(status_code=429, detail="Demo limit reached. Please wait a minute and try again.")
+    window.append(now)
+
+
+@app.post("/requests", response_model=RequestOut, status_code=201, dependencies=[Depends(demo_rate_limit)])
 def create_request(body: RequestIn, session: Session = Depends(get_session), llm: LLM = Depends(llm_dependency)):
     try:
         outcome = process(body.text, llm, PgRetriever(session, _embedder))

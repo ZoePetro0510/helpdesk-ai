@@ -1,0 +1,13 @@
+# Build context for the live-demo image (deploy/hf/Dockerfile), built from the repo root
+.git
+.env
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+web/node_modules
+web/dist
+web/test-results
+web/playwright-report
+web/*.tsbuildinfo
+docs

@@ -1,0 +1,51 @@
+name: Deploy live demo
+
+# After CI passes on main, push the app to a Hugging Face Space (Docker).
+# Needs a repository secret HF_TOKEN (a Hugging Face write token) and a repository
+# variable HF_SPACE (for example "your-name/orbit-helpdesk"). Without them it skips.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Build the Space folder (tracked files only)
+        run: |
+          mkdir space
+          git archive HEAD api data web deploy .dockerignore | tar -x -C space
+          cp deploy/hf/Dockerfile space/Dockerfile
+          cp deploy/hf/README.space.md space/README.md
+
+      - name: Upload to Hugging Face
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE: ${{ vars.HF_SPACE }}
+        run: |
+          if [ -z "$HF_TOKEN" ] || [ -z "$HF_SPACE" ]; then
+            echo "::notice::HF_TOKEN or HF_SPACE is not set, skipping the demo deploy"
+            exit 0
+          fi
+          pip install --quiet huggingface_hub
+          python - <<'PY'
+          import os
+          from huggingface_hub import HfApi
+
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          api.upload_folder(
+              repo_id=os.environ["HF_SPACE"],
+              repo_type="space",
+              folder_path="space",
+              commit_message=f"Deploy {os.environ.get('GITHUB_SHA', '')[:7]} from GitHub",
+          )
+          print(f"Deployed to https://huggingface.co/spaces/{os.environ['HF_SPACE']}")
+          PY

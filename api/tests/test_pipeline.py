@@ -120,3 +120,22 @@ def test_answers_with_placeholders_are_not_sent(text, auto):
     assert (o.route == "auto_reply") is auto
     if not auto:
         assert "placeholder" in o.route_reason
+
+
+def test_demo_rate_limit(monkeypatch):
+    from fastapi import HTTPException
+
+    from app import main
+
+    class Req:
+        headers = {"x-forwarded-for": "203.0.113.9"}
+        client = None
+
+    monkeypatch.setattr(main.settings, "demo_mode", True)
+    monkeypatch.setattr(main.settings, "demo_requests_per_minute", 2)
+    main._recent.clear()
+    main.demo_rate_limit(Req())
+    main.demo_rate_limit(Req())
+    with pytest.raises(HTTPException) as e:
+        main.demo_rate_limit(Req())
+    assert e.value.status_code == 429

@@ -43,6 +43,10 @@ class Settings(BaseSettings):
 
     # Dashboard assumption: minutes a person would spend answering one routine question
     minutes_per_auto_answer: int = 8
+
+    # Public live demo: shows a banner and limits how fast one visitor can send requests
+    demo_mode: bool = False
+    demo_requests_per_minute: int = 10
     # Claude prices, USD per million tokens (input, output). Local models cost 0.
     model_prices: dict[str, tuple[float, float]] = {
         "claude-opus-5-5": (4.0, 20.0),
